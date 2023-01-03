@@ -1,0 +1,216 @@
+---
+title: "Does a person's characteristics affect the amount of time they spend in jail?"
+author: 'By: Yogi Patel'
+output:
+  pdf_document: default
+mainfont: Arial
+fontsize: 12pt
+---
+# Introduction
+All throughout the country, people of color face struggles whether it be with lack of opportunities or unfair treatment. This project will explore how race and other attributes of characteristics affect one's arrest details, specifically how people of color generally have different arrest details than white individuals. Overall, I will use modeling techniques and visualizations to display trends seen in society regarding inequality with local data from our college town of Champaign, IL. 
+
+![](images/handcuffs.png)
+\
+\
+\
+\
+
+
+# Project and Data
+This project will be using the dataset from the Champaign County Sheriff Office that has data about the demographics of the jail bookings of those who were arrested in the area between the years 2011-2016. Although this dataset includes bookings from various states and cities, we will focus on arrest bookings throughout the years in the town of Champaign, IL.
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
+```
+
+# Data Cleaning
+In this dataset, Champaign is misspelled several times. Since these are considered data errors that can provide valuable information to this project, I clean the data by correcting these misspellings. First, I filter the data to focus on bookings on Illinois and then use regex to to select mispellings and correct them using a condition. After this, I remove columns with missing values in the columns we will be testing for significance.
+\
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+
+CCSO <- read_csv("https://urldefense.com/v3/__https://uofi.box.com/shared/static/9elozjsg99bgcb7gb546wlfr3r2gc9b7.csv__;!!DZ3fjg!qne6EGT2quooBkl5yefW0Q7-9ahvQK16VabWd7V9ijMdaIbnYzNYU_bir-Vz4RLl8a0$", 
+    col_types = cols(`BOOKING DATE` = col_date(format = "%m/%d/%Y"), 
+        `RELEASED DATE` = col_date(format = "%m/%d/%Y")))
+
+CCSO <- CCSO %>%
+  filter(STATE=='ILLINOIS') %>% 
+  mutate(CITYtemp=ifelse(str_detect(CITY, "^CH\\w+P|^CHA\\w+I"), "CHAMPAIGN", CITY)) %>%
+  select(-CITY) %>%
+  rename(CITY=CITYtemp) %>%
+  filter(CITY=="CHAMPAIGN")
+
+CCSO <- CCSO[!(is.na(CCSO$RACE)), ]
+CCSO <- CCSO[!(is.na(CCSO$`EMPLOYMENT STATUS`)), ]
+CCSO <- CCSO[!(is.na(CCSO$`Age at Arrest`)), ]
+CCSO <- CCSO[!(is.na(CCSO$`Days in Jail`)), ]
+CCSO <- CCSO[!(is.na(CCSO$SEX)), ]
+```
+
+
+# Data Modeling : Linear Regression and F tests
+The first step in my project is to model the data and decide which linear regression model and variables are significant in predicting the outcome. Specifically, I explore which combination of variables creates the best model in predicting how many days an individual will spend in jail. I do this by using the lm() function with different variables.
+
+In this case the test will focus on these hypotheses:
+\
+Null Hypothesis: The first model is adequate in predicting the response variable (Age at Arrest is adequate in predicting the amount of time spent in jail)
+\
+Alternative Hypothesis: The additive model is better in predicting the response variable (The model with additional variables better predicts the amount of time spent in jail)
+
+Then using multiple F tests, I compare each model with the previous one to see which regression model best predicts the days spent in jail. We expect the model with all the variables to be significant as we expect that race, age at arrest, sex, and employment status are all attributes that affects time spent in jail. I conduct these F tests by using the anova() function which tests how the dependent variable of "Days in Jail" changes according to the models with added independent variables.
+
+```{r, message=FALSE, warning=FALSE}
+mod1=lm(`Days in Jail`~ `Age at Arrest`, data=CCSO)
+mod2=lm(`Days in Jail`~ `Age at Arrest` + RACE, data=CCSO)
+mod3=lm(`Days in Jail`~ `Age at Arrest` + RACE + `EMPLOYMENT STATUS`, data=CCSO)
+mod4=lm(`Days in Jail`~ `Age at Arrest` + RACE + `EMPLOYMENT STATUS` + `SEX`, data=CCSO)
+
+anova(mod1, mod2)
+anova(mod2, mod3)
+anova(mod3, mod4)
+```
+
+# Data Modeling Results
+From the analysis of variance tables, each P value for the F test between models explains which model is better. As shown, the P value for each model comparisons is less than alpha=0.05. This means that we are able to reject the null hypothesis and can say the additive model is better for each model. Overall, using backward elimination, the model with all variables is significant and the best fit in predicting the response of days spent in jail for each booking.
+
+
+# Data Modeling Follow-up
+Following the model selection, I conduct a Tukey Test which measures the significant difference between the attributes in predicting a specific outcome. By using the TukeyHSD() function, I can display how each race has a difference in predicting how many days one spends in jail.
+
+```{r, message=FALSE, warning=FALSE}
+TukeyHSD(aov(`Days in Jail`~RACE, data=CCSO))
+```
+
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+
+# Data Modeling Follow-up Results
+The tukey test results shows us the existence of differences between each race. From the results, it is revealed how the most significant differences are between groups Black-Asian/Pacific Islander, Hispanic-Black, and White-Black. There is a significant difference between Black and each race and we know this as the P value is less than an alpha value of 0.05. From this we can say that the difference supports that a booking of a individual of race Black typically predicts highers days in jail.
+
+# Data Visualizations
+Now that it is determined which variables are significant in determining the arrest details, I will display various visualizations that will support the model chosen. These visualizations will reveal how the effect of each variable changes the days spent in jail. In general, focusing on how inequality exists whether it comes to race, gender, age, employment status, and even more.
+
+
+
+## Visualization 1: 
+First, I begin by filtering the dataset to count the frequency of each race's bookings.
+```{r, message=FALSE, warning=FALSE}
+CCSOrace <- CCSO %>% 
+  count(RACE)
+
+CCSOrace
+```
+#### Pie chart:
+This pie chart displays the number of arrests per race using the filtered dataset above. 
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = CCSOrace, aes(x = "", y = -n, fill = reorder(RACE, -n))) + 
+  geom_bar(stat = "identity", color="white") + 
+  coord_polar("y", start=0) + theme_void() + ggtitle("Number of arrests per race")
+```
+
+#### Pie Chart Analysis:
+With over 65% of the data, the race with the highest number of arrests is Black. This supports the idea that race is a main variable that affects one's arrest details.
+
+
+## Visualization 2:
+#### Scatterplot:
+This scatter plot displays the age at arrest vs the days in jail for each booking colored by race.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data=CCSO, aes(x=`Age at Arrest`, y=`Days in Jail`, col=RACE)) + geom_point() +
+  ggtitle("Age at Arrest vs. Days in Jail per Race")
+``` 
+
+#### Scatterplot Analysis:
+The data displays how Black individuals not only account for most of the arrests, but typically spend more days in jail than White individuals or other races. This exemplifies how race has an impact on the arrest attributes such as what age they are arrested and how long they spend in jail.
+
+
+## Visualizations 3 & 4:
+Here I filter the dataset to find the average days spent in jail and the average age at arrest for each race.
+```{r, message=FALSE, warning=FALSE}
+CCSOav <- CCSO %>% 
+  group_by(RACE) %>% 
+  summarise(avDays = mean(`Days in Jail`), avAge = mean(`Age at Arrest`))
+
+CCSOav
+```
+
+#### Bar Charts:
+This chart displays the race of an individual along with the average number of days that particular race spent in jail.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data=CCSOav, aes(x=RACE, y=avDays, fill=RACE)) + 
+    geom_col() + ggtitle("Average days spent in Jail for each Race") + xlab("Race") +
+  ylab("Average Days spent in Jail") + scale_x_discrete(guide = guide_axis(n.dodge=2))
+```
+
+This chart displays the race of an individual along with the average age that particular race was arrested. 
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data=CCSOav, aes(x=RACE, y=avAge, fill=RACE)) + 
+    geom_col() + ggtitle("Average Age at Arrest for each Race") + xlab("Race") +
+  ylab("Average Age at Arrest") + scale_x_discrete(guide = guide_axis(n.dodge=2))
+```
+
+#### Bar Charts Analysis:
+\
+Bar Chart 1: The data displays how on average, black individuals are one of the races that spent the most amount of days in jail. Not only blacks, but other people of color also spend a greater average of time in jail compared to white individuals. This chart reinforces how race impacts arrest attributes such as affecting how long they spend in jail.
+\
+Bar Chart 2: The data displays how on average, people of color (black, hispanic, asian, etc.) were arrested at a younger age than White individuals. This reinforces how race impacts arrest attributes such as affecting what age they are arrested.
+
+
+## Visualization 5:
+For this visualization, I filter the dataset to find the average days spent in jail and the average age at arrest for each sex.
+```{r, message=FALSE, warning=FALSE}
+CCSOsex <- CCSO %>% 
+  group_by(SEX) %>% 
+  summarise(avDays = mean(`Days in Jail`), avAge = mean(`Age at Arrest`))
+
+CCSOsex
+```
+
+#### Facet Scatterplots:
+This scatterplot shows age at arrest versus days in jail for different facets of sex. It also displays vertical and horizontal lines for the average of each attribute per group.
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(data=CCSO, aes(x=`Age at Arrest`, y=`Days in Jail`, col=SEX)) + geom_point() +
+  facet_wrap(~SEX) + geom_hline(data=CCSOsex, aes(yintercept=avDays)) +
+  geom_vline(data= CCSOsex, aes(xintercept=avAge)) +
+  ggtitle("Age at Arrest vs Days in Jail per Sex")
+```
+
+#### Facet Scatterplots Analysis:
+The plots reveal how females not only have less arrests but also spend an average of less days in jail. Females spend an average of 6.50115 days in jail vs 21.02285 days spent be males. These graphs support how sex is another characteristic that affects arrest details similar to how race does.
+
+
+
+
+## Visualization 6:
+#### Stacked Row Chart:
+This row chart displays the amount of days spent in jail for each type of employment status, stacked by race. 
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(CCSO, aes(fill=`RACE`, y=`Days in Jail`, x=`EMPLOYMENT STATUS`)) + 
+    geom_bar(position="stack", stat="identity") + coord_flip() +
+  ggtitle("Average days spent in Jail for each Employment Status") +
+  xlab("Employment Status")
+```
+
+#### Stacked Row Chart Analysis:
+This visualization displays how those who are unemployed spend the most time in jail. Also, people of the race black account for most of this group. Race and employment status both affect the days spent in jail significantly as students, employed, retired, and other individuals typically spend less time and account for less of the bookings as well.
+
+
+# Conclusion:
+Through cleaning, modeling, visualizing, and summarizing data, this project exhibits the relationship between a person's characteristics and their arrest details. As seen, the variables that are significant in predicting the amount of days one spends in jail include age at arrest, race, sex, and employment status. Being from specific minorities and groups largely changes the circumstances of arrest and society typically follows these same trends as well. By analyzing this issue in our local college campus town, we can see how inequality exists where we live similar to how we see in the news all over the country.
